@@ -4,7 +4,7 @@ import { fetchHistory, fetchLatest, fetchReportDetail, runReportSSE, stopReport,
 import { useI18n } from './i18n';
 import MarkdownReport from './MarkdownReport';
 import { EMPTY_REPORT, normalizeReport } from './reportModel';
-import type { AnalystCategoryEvent, AnalystDeepDiveEvent, HistoryEntry, ItemPhase, PipelineEvent, TrendItem, TrendReport } from './types';
+import type { AnalystCategoryEvent, AnalystDeepDiveEvent, ContentTopic, HistoryEntry, ItemPhase, PipelineEvent, TrendItem, TrendReport } from './types';
 import styles from './App.module.css';
 
 function formatTime(value?: string, locale = 'zh-CN'): string {
@@ -321,6 +321,47 @@ function LiveItemCard({ item, showScore }: { item: LiveItem; showScore: boolean 
         {showScore && item.score != null && <span>score {item.score}</span>}
       </div>
     </div>
+  );
+}
+
+function ContentTopicPanel({ topics, onOpenReport }: { topics: ContentTopic[]; onOpenReport: () => void }) {
+  const visibleTopics = topics.slice(0, 5);
+  if (!visibleTopics.length) return null;
+
+  return (
+    <section className={styles.contentTopicPanel}>
+      <div className={styles.contentTopicHeader}>
+        <div>
+          <p className={styles.panelLabel}>Creator Topics</p>
+          <h3 className={styles.contentTopicTitle}>AI 自媒体选题</h3>
+        </div>
+        <button type="button" className={styles.ghostButton} onClick={onOpenReport}>
+          查看完整报告 <IconArrowRight size={13} />
+        </button>
+      </div>
+      <div className={styles.contentTopicList}>
+        {visibleTopics.map((topic, index) => (
+          <a
+            className={styles.contentTopicItem}
+            href={topic.sourceUrl}
+            key={topic.id || topic.sourceUrl}
+            target="_blank"
+            rel="noreferrer"
+          >
+            <div className={styles.contentTopicIndex}>{index + 1}</div>
+            <div className={styles.contentTopicMain}>
+              <div className={styles.contentTopicMeta}>
+                <span>score {Math.round(topic.score)}</span>
+                <span>{topic.format}</span>
+              </div>
+              <strong>{topic.title}</strong>
+              <p>{topic.contentAngle}</p>
+              <span className={styles.contentTopicHook}>{topic.hook}</span>
+            </div>
+          </a>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -804,6 +845,10 @@ export default function App() {
               {TOPICS.map(topic => <span key={topic}>{topic}</span>)}
             </div>
           </div>
+
+          {!bootstrapping && !loading && safeReport.status === 'success' && (
+            <ContentTopicPanel topics={safeReport.contentTopics || []} onOpenReport={openLatestReport} />
+          )}
 
           {bootstrapping ? (
             <SkeletonNewsList />
