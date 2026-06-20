@@ -1,0 +1,30 @@
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "cloudFunctions": {
+    "nodejs": {
+      "includeFiles": []
+    }
+  },
+  "agents": {
+    "framework": "openai-agents-sdk",
+    "timeout": 1200,
+    "sandbox": {
+      "timeout": 300
+    }
+  },
+  "schedules": [
+    {
+      "name": "ai-trends-periodic",
+      "cron": "0 9 * * *",
+      "path": "/ai-trends/run",
+      "payload": {
+        "_schedule": true,
+        "trigger": "schedule",
+        "sources": ["hackernews", "devto", "web"],
+        "limit": 30
+      },
+      "timeout": 1200
+    }
+  ]
+}
