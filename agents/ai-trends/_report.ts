@@ -1,4 +1,4 @@
-import type { TrendGroup, TrendReport, TrendSourceItem } from './_types.js';
+import type { ContentTopic, TrendGroup, TrendReport, TrendSourceItem } from './_types.js';
 
 export function utcNow(): string {
   return new Date().toISOString();
@@ -21,7 +21,49 @@ function summarizeCategory(category: string, items: TrendSourceItem[]): string {
   return `${category} 方向出现 ${items.length} 条相关动态，代表内容包括：${titles.join('；')}。`;
 }
 
-export function generateMarkdown(items: TrendSourceItem[], generatedAt: string): { markdown: string; trends: TrendGroup[] } {
+export function buildFallbackContentTopics(items: TrendSourceItem[]): ContentTopic[] {
+  return [...items]
+    .sort((a, b) => (b.score || 0) - (a.score || 0))
+    .slice(0, 5)
+    .map((item, index) => ({
+      id: `topic_${index + 1}`,
+      title: `${item.title}：这件事对 AI 行业意味着什么？`,
+      sourceUrl: item.url,
+      sourceTitle: item.title,
+      newsIds: [item.id],
+      score: Math.max(60, Math.min(100, item.score || 70)),
+      whyWorthMaking: item.aiSummary || item.summary || '该动态与当天 AI 技术或产业讨论直接相关，适合快速转化为观点型内容。',
+      contentAngle: `从 ${item.category || 'AI Industry'} 视角拆解事件本身、受影响的人群，以及接下来可能出现的变化。`,
+      hook: '今天这条 AI 新闻，真正值得看的是它背后的信号。',
+      targetAudience: 'AI 从业者、产品经理、技术创作者和关注 AI 趋势的读者',
+      format: '图文快评或 60-90 秒短视频',
+    }));
+}
+
+function appendContentTopics(lines: string[], topics: ContentTopic[]): void {
+  lines.push('## AI 自媒体选题', '');
+  if (!topics.length) {
+    lines.push('暂无足够明确的选题候选。', '');
+    return;
+  }
+  for (const topic of topics.slice(0, 5)) {
+    lines.push(
+      `${topic.id.replace('topic_', '')}. **${topic.title}**`,
+      `   - 来源：[${topic.sourceTitle}](${topic.sourceUrl})`,
+      `   - 选题价值：${topic.whyWorthMaking}`,
+      `   - 切入角度：${topic.contentAngle}`,
+      `   - 开头钩子：${topic.hook}`,
+      `   - 建议形式：${topic.format}；目标受众：${topic.targetAudience}`,
+      '',
+    );
+  }
+}
+
+export function generateMarkdown(
+  items: TrendSourceItem[],
+  generatedAt: string,
+  contentTopics: ContentTopic[] = buildFallbackContentTopics(items),
+): { markdown: string; trends: TrendGroup[] } {
   const grouped = new Map<string, TrendSourceItem[]>();
   for (const item of items) {
     const category = item.category || 'AI Industry';
@@ -59,6 +101,8 @@ export function generateMarkdown(items: TrendSourceItem[], generatedAt: string):
     lines.push('');
   }
 
+  appendContentTopics(lines, contentTopics);
+
   lines.push(
     '## 后续关注问题',
     '',
@@ -74,9 +118,14 @@ export function generateMarkdown(items: TrendSourceItem[], generatedAt: string):
   return { markdown: lines.join('\n'), trends };
 }
 
-export function generateFallbackReport(items: TrendSourceItem[], runId: string, trigger = 'manual'): TrendReport {
+export function generateFallbackReport(
+  items: TrendSourceItem[],
+  runId: string,
+  trigger = 'manual',
+  contentTopics = buildFallbackContentTopics(items),
+): TrendReport {
   const generatedAt = utcNow();
-  const { markdown, trends } = generateMarkdown(items, generatedAt);
+  const { markdown, trends } = generateMarkdown(items, generatedAt, contentTopics);
   return {
     runId,
     status: 'success',
@@ -87,6 +136,7 @@ export function generateFallbackReport(items: TrendSourceItem[], runId: string, 
     reportMarkdown: markdown,
     trends,
     items,
+    contentTopics,
   };
 }
 

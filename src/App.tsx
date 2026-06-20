@@ -46,6 +46,7 @@ const PIPELINE_STAGES = [
   { key: 'fetch', i18nKey: 'stageFetch' as const, parallel: undefined },
   { key: 'filter', i18nKey: 'stageFilter' as const, parallel: ['curator', 'summarizer'] },
   { key: 'analyst', i18nKey: 'stageAnalyze' as const, parallel: undefined },
+  { key: 'planner', i18nKey: 'stagePlanTopics' as const, parallel: undefined },
   { key: 'writer', i18nKey: 'stageWrite' as const, parallel: undefined },
 ] as const;
 

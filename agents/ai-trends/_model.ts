@@ -3,8 +3,10 @@ import { OpenAI } from 'openai';
 import { z } from 'zod';
 
 import type { TrendLibraryItem } from './_items.js';
-import { generateFallbackReport, utcNow } from './_report.js';
+import { buildFallbackContentTopics, generateFallbackReport, utcNow } from './_report.js';
 import type {
+  ContentTopic,
+  ContentTopicPlannerOutput,
   CuratorOutput,
   FinishedReport,
   SummarizerOutput,
@@ -20,12 +22,16 @@ import {
 
 // ── OpenAI client setup (via AI Gateway) ──────────────────────────
 
-function createModel(env: Record<string, string | undefined>): OpenAIChatCompletionsModel {
-  const client = new OpenAI({
+export function buildOpenAIClientOptions(env: Record<string, string | undefined>) {
+  return {
     apiKey: env.LLM_API_KEY || env.AI_GATEWAY_API_KEY || env.OPENAI_API_KEY,
     baseURL: env.LLM_BASE_URL || env.AI_GATEWAY_BASE_URL || env.OPENAI_BASE_URL,
     timeout: 600000,
-  });
+  };
+}
+
+function createModel(env: Record<string, string | undefined>): OpenAIChatCompletionsModel {
+  const client = new OpenAI(buildOpenAIClientOptions(env));
   const modelName = env.LLM_MODEL || env.AI_GATEWAY_MODEL || '@makers/minimax-m2.7';
   return new OpenAIChatCompletionsModel(client as any, modelName);
 }
@@ -303,12 +309,39 @@ function createWriterAgent(env: Record<string, string | undefined>) {
       '## 深度分析',
       '（基于 deepDives 字段，2-3 个被深入分析过的条目，附带 insight）',
       '',
+      '## AI 自媒体选题',
+      '（基于 contentTopics 字段，严格输出 5 个最值得今天做成 AI 自媒体内容的选题。每个选题包含：选题标题、来源、选题价值、切入角度、开头钩子、建议形式与目标受众。）',
+      '',
       '写作要求：',
       '1. 所有来源链接使用 Markdown 超链接格式 [title](url)；',
       '2. 不编造来源，所有链接必须来自输入数据；',
       '3. 风格简洁专业，全文控制在 1500-3000 字；',
       '4. 直接输出 Markdown 内容，不要包裹在 JSON 或代码块中；',
-      '5. 不要添加 "后续关注问题" 之类没有数据支撑的章节。',
+      '5. 不要添加 "后续关注问题" 之类没有数据支撑的章节；',
+      '6. "AI 自媒体选题" 章节必须来自 contentTopics，不能额外编造新闻来源。',
+    ].join('\n'),
+    model: createModel(env),
+  });
+}
+
+function createTopicPlannerAgent(env: Record<string, string | undefined>) {
+  return new Agent({
+    name: 'TopicPlannerAgent',
+    instructions: [
+      '你是 AI 自媒体选题策划专家。你的任务是从当天已筛选和打分的 AI 资讯中，选出最值得做成内容的 5 个选题。',
+      '',
+      '选择标准：',
+      '1. 新闻必须来自输入数据，sourceUrl/sourceTitle/newsIds 不能编造；',
+      '2. 优先选择：影响面广、观点冲突强、有实操价值、有传播钩子、能引出行业判断的资讯；',
+      '3. 不要只复述新闻，要给出适合自媒体表达的具体切入角度；',
+      '4. 避免 5 个选题全部集中在同一细分方向，除非当天确实只有一个主题；',
+      '5. 每个选题需要能独立成稿，适合图文、短视频、长文或直播切片；',
+      '6. 评分 score 表示自媒体选题价值，综合考虑热度、差异化、受众相关度和可讲述性。',
+      '',
+      '你必须只输出 JSON，格式如下（不要包含其他文字）：',
+      '{"topics":[{"id":"topic_1","title":"...","sourceUrl":"...","sourceTitle":"...","newsIds":["..."],"score":88,"whyWorthMaking":"...","contentAngle":"...","hook":"...","targetAudience":"...","format":"..."}],"plannerNotes":"..."}',
+      '',
+      'topics 必须最多 5 个；如果输入不足 5 条，则输出尽可能多的高质量选题。',
     ].join('\n'),
     model: createModel(env),
   });
@@ -353,7 +386,12 @@ function buildAnalystPrompt(items: TrendSourceItem[], noNewItems?: boolean): str
   return lines.join('\n');
 }
 
-function buildWriterPrompt(items: TrendSourceItem[], analysis: TrendAnalysis | null, noNewItems?: boolean): string {
+function buildWriterPrompt(
+  items: TrendSourceItem[],
+  analysis: TrendAnalysis | null,
+  contentTopics: ContentTopic[],
+  noNewItems?: boolean,
+): string {
   const lines: string[] = [];
   if (analysis) {
     lines.push('请基于以下结构化分析数据，严格按照你的报告结构模板撰写报告：', '', `分析数据：${JSON.stringify(analysis)}`);
@@ -365,10 +403,51 @@ function buildWriterPrompt(items: TrendSourceItem[], analysis: TrendAnalysis | n
   const newCount = items.filter(i => i.isNew).length;
   lines.push('', `数据源统计：${JSON.stringify(sourceCounts)}，新增 ${newCount} 条`);
   lines.push('', '原始条目（含 url、category、aiSummary，用于填充报告链接和摘要）：', buildItemsJson(items));
+  lines.push('', 'AI 自媒体选题（必须用于生成 "AI 自媒体选题" 章节）：', JSON.stringify(contentTopics));
   if (noNewItems) {
     lines.push('', '⚠️ 本次未发现新增内容。在"今日要点"中注明，"新出现"章节写"本次无新增条目"。');
   }
   return lines.join('\n');
+}
+
+function buildTopicPlannerPrompt(items: TrendSourceItem[], analysis: TrendAnalysis | null, noNewItems?: boolean): string {
+  const lines = [
+    '请从以下当天 AI 资讯中筛选最值得做成 AI 自媒体内容的 5 个选题，并为每个选题设计内容角度。',
+    '',
+    '当天资讯（含 url、category、aiSummary、score、isNew、seenCount）：',
+    buildItemsJson(items),
+  ];
+  if (analysis) {
+    lines.push('', `分析师输出：${JSON.stringify(analysis)}`);
+  }
+  if (noNewItems) {
+    lines.push('', '本次采集没有新增资讯，请优先从仍持续活跃、分数高、可延展讨论的条目中选题，并在选题价值里说明这是持续关注信号。');
+  }
+  return lines.join('\n');
+}
+
+function normalizeContentTopics(rawTopics: ContentTopic[] | undefined, items: TrendSourceItem[]): ContentTopic[] {
+  if (!rawTopics?.length) return [];
+  const byId = new Map(items.map(item => [item.id, item]));
+  const byUrl = new Map(items.map(item => [item.url, item]));
+  const normalized: ContentTopic[] = [];
+  for (const topic of rawTopics) {
+    const supportingItems = topic.newsIds
+      .map(id => byId.get(id))
+      .filter((item): item is TrendSourceItem => !!item);
+    const primary = supportingItems[0] || byUrl.get(topic.sourceUrl);
+    if (!primary) continue;
+    normalized.push({
+      ...topic,
+      id: topic.id || `topic_${normalized.length + 1}`,
+      sourceUrl: primary.url,
+      sourceTitle: primary.title,
+      newsIds: supportingItems.length ? supportingItems.map(item => item.id) : [primary.id],
+      score: Math.max(0, Math.min(100, Number(topic.score) || primary.score || 70)),
+    });
+    if (normalized.length >= 5) break;
+  }
+  return normalized;
 }
 
 // ── Report assembly helpers ───────────────────────────────────────
@@ -387,7 +466,13 @@ function buildTrendGroups(items: TrendSourceItem[]): TrendGroup[] {
   }));
 }
 
-function assembleReportFromWriter(items: TrendSourceItem[], markdown: string, runId: string, trigger: string): TrendReport {
+function assembleReportFromWriter(
+  items: TrendSourceItem[],
+  markdown: string,
+  runId: string,
+  trigger: string,
+  contentTopics: ContentTopic[] = [],
+): TrendReport {
   const firstLine = markdown.split('\n').find(l => l.trim() && !l.startsWith('#'))?.trim() || '';
   const summary = firstLine.slice(0, 120) || `${items.length} 条 AI 资讯趋势分析`;
   return {
@@ -400,10 +485,43 @@ function assembleReportFromWriter(items: TrendSourceItem[], markdown: string, ru
     reportMarkdown: markdown,
     trends: buildTrendGroups(items),
     items,
+    contentTopics,
   };
 }
 
-function assembleReportFromAnalysis(items: TrendSourceItem[], analysis: TrendAnalysis, runId: string, trigger: string): TrendReport {
+function appendContentTopicsToMarkdown(lines: string[], topics: ContentTopic[]): void {
+  lines.push('## AI 自媒体选题', '');
+  if (!topics.length) {
+    lines.push('暂无足够明确的选题候选。', '');
+    return;
+  }
+  for (const [index, topic] of topics.slice(0, 5).entries()) {
+    lines.push(
+      `${index + 1}. **${topic.title}**`,
+      `   - 来源：[${topic.sourceTitle}](${topic.sourceUrl})`,
+      `   - 选题价值：${topic.whyWorthMaking}`,
+      `   - 切入角度：${topic.contentAngle}`,
+      `   - 开头钩子：${topic.hook}`,
+      `   - 建议形式：${topic.format}；目标受众：${topic.targetAudience}`,
+      '',
+    );
+  }
+}
+
+function ensureContentTopicsSection(markdown: string, topics: ContentTopic[]): string {
+  if (markdown.includes('## AI 自媒体选题')) return markdown;
+  const lines = [markdown.trim(), ''];
+  appendContentTopicsToMarkdown(lines, topics);
+  return lines.join('\n').trim();
+}
+
+function assembleReportFromAnalysis(
+  items: TrendSourceItem[],
+  analysis: TrendAnalysis,
+  runId: string,
+  trigger: string,
+  contentTopics: ContentTopic[] = [],
+): TrendReport {
   const lines = ['# AI 趋势日报', '', `> ${analysis.keyInsight}`, ''];
 
   // Group by category from analyst output
@@ -432,7 +550,9 @@ function assembleReportFromAnalysis(items: TrendSourceItem[], analysis: TrendAna
     lines.push('');
   }
 
-  const report = generateFallbackReport(items, runId, trigger);
+  appendContentTopicsToMarkdown(lines, contentTopics);
+
+  const report = generateFallbackReport(items, runId, trigger, contentTopics);
   report.reportMarkdown = lines.join('\n');
   report.summary = analysis.keyInsight;
   report.agentWarning = 'Writer agent failed; report generated from analyst output';
@@ -441,7 +561,7 @@ function assembleReportFromAnalysis(items: TrendSourceItem[], analysis: TrendAna
 
 // ── Pipeline ──────────────────────────────────────────────────────
 
-export type PipelineStage = 'fetch' | 'curator' | 'summarizer' | 'analyst' | 'writer' | 'complete' | 'error';
+export type PipelineStage = 'fetch' | 'curator' | 'summarizer' | 'analyst' | 'planner' | 'writer' | 'complete' | 'error';
 export type PipelineStatus = 'running' | 'done' | 'failed' | 'skipped';
 
 export interface PipelineEvent {
@@ -476,6 +596,7 @@ export interface PipelineStageResult {
   curatorOutput?: CuratorOutput;
   summarizerOutput?: SummarizerOutput;
   analystOutput?: TrendAnalysis;
+  contentTopicOutput?: ContentTopicPlannerOutput;
   writerMarkdown?: string;
   failedStage?: string;
   error?: string;
@@ -720,13 +841,65 @@ export async function runAgentPipeline(input: PipelineInput): Promise<{
     throw new DOMException('Aborted', 'AbortError');
   }
 
-  // ── Stage 4: Writer (token-streaming with non-stream fallback) ───
+  // ── Stage 4: Topic Planner ─────────────────────────────────────
+  let contentTopics: ContentTopic[] = [];
+
+  try {
+    const tPlanner = Date.now();
+    console.log('[pipeline] Stage 4 (TopicPlanner) start');
+    emit({ stage: 'planner', status: 'running' });
+    const plannerAgent = createTopicPlannerAgent(env);
+    const plannerResult = await streamWithProgress(
+      plannerAgent,
+      buildTopicPlannerPrompt(enrichedItems, analysis, noNewItems),
+      'planner',
+      emit,
+      8000,
+      signal,
+    );
+    const raw = String(plannerResult.finalOutput || '');
+    const parsed = parseJsonFromText<ContentTopicPlannerOutput>(raw);
+    const dPlanner = +(((Date.now() - tPlanner) / 1000).toFixed(1));
+    const normalizedTopics = normalizeContentTopics(parsed?.topics, enrichedItems);
+    if (normalizedTopics.length) {
+      contentTopics = normalizedTopics;
+      stages.contentTopicOutput = { topics: contentTopics, plannerNotes: parsed?.plannerNotes || '' };
+      const detail = `${contentTopics.length} topics`;
+      console.log(`[pipeline] TopicPlanner done (${dPlanner}s): ${detail}`);
+      emit({ stage: 'planner', status: 'done', duration: dPlanner, detail });
+      emit({ type: 'content_topics', topics: contentTopics });
+    } else {
+      contentTopics = buildFallbackContentTopics(enrichedItems);
+      console.log(`[pipeline] TopicPlanner done (${dPlanner}s): output parse failed, using fallback topics`);
+      emit({ stage: 'planner', status: 'failed', duration: dPlanner, detail: 'parse failed; fallback topics' });
+      emit({ type: 'content_topics', topics: contentTopics });
+    }
+  } catch (error) {
+    if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) {
+      console.log('[pipeline] Stage 4 aborted by user');
+      throw error;
+    }
+    stages.failedStage = stages.failedStage || 'planner';
+    stages.error = stages.error || (error instanceof Error ? error.message : String(error));
+    contentTopics = buildFallbackContentTopics(enrichedItems);
+    console.log('[pipeline] TopicPlanner error:', stages.error);
+    emit({ stage: 'planner', status: 'failed', detail: stages.error });
+    emit({ type: 'content_topics', topics: contentTopics });
+  }
+
+  // ── Abort check between stages ──
+  if (signal?.aborted) {
+    console.log('[pipeline] Aborted before Stage 5');
+    throw new DOMException('Aborted', 'AbortError');
+  }
+
+  // ── Stage 5: Writer (token-streaming with non-stream fallback) ───
   try {
     const t2 = Date.now();
-    console.log('[pipeline] Stage 4 (Writer) start — streaming');
+    console.log('[pipeline] Stage 5 (Writer) start — streaming');
     emit({ stage: 'writer', status: 'running' });
     const writerAgent = createWriterAgent(env);
-    const writerPrompt = buildWriterPrompt(enrichedItems, analysis, noNewItems);
+    const writerPrompt = buildWriterPrompt(enrichedItems, analysis, contentTopics, noNewItems);
 
     let markdown = '';
 
@@ -800,11 +973,12 @@ export async function runAgentPipeline(input: PipelineInput): Promise<{
 
     const d2 = +(((Date.now() - t2) / 1000).toFixed(1));
     if (markdown && markdown.length > 50) {
+      markdown = ensureContentTopicsSection(markdown, contentTopics);
       stages.writerMarkdown = markdown;
       const detail = `${markdown.length} chars`;
       console.log(`[pipeline] Writer done (${d2}s): ${detail}`);
       emit({ stage: 'writer', status: 'done', duration: d2, detail });
-      return { report: assembleReportFromWriter(enrichedItems, markdown, runId, trigger), stages };
+      return { report: assembleReportFromWriter(enrichedItems, markdown, runId, trigger, contentTopics), stages };
     }
     console.log(`[pipeline] Writer done (${d2}s): output too short`);
     emit({ stage: 'writer', status: 'failed', duration: d2, detail: 'output too short' });
@@ -822,12 +996,12 @@ export async function runAgentPipeline(input: PipelineInput): Promise<{
   // ── Fallback from Analyst output ────────────────────────────────
   if (analysis) {
     console.log('[pipeline] Falling back to analyst-based report');
-    return { report: assembleReportFromAnalysis(enrichedItems, analysis, runId, trigger), stages };
+    return { report: assembleReportFromAnalysis(enrichedItems, analysis, runId, trigger, contentTopics), stages };
   }
 
   // ── Ultimate fallback ───────────────────────────────────────────
   console.log('[pipeline] All agents failed, using code-generated fallback');
-  const fallback = generateFallbackReport(enrichedItems, runId, trigger);
+  const fallback = generateFallbackReport(enrichedItems, runId, trigger, contentTopics.length ? contentTopics : undefined);
   fallback.agentWarning = stages.error || 'All agents failed';
   return { report: fallback, stages };
 }

@@ -23,6 +23,7 @@ const translations = {
     stageFetch: '采集',
     stageFilter: '筛选 & 摘要',
     stageAnalyze: '分析',
+    stagePlanTopics: '选题策划',
     stageWrite: '撰写',
 
     // Live phase hints
@@ -132,6 +133,7 @@ const translations = {
     stageFetch: 'Fetch',
     stageFilter: 'Filter & Summarize',
     stageAnalyze: 'Analyze',
+    stagePlanTopics: 'Plan Topics',
     stageWrite: 'Write',
 
     // Live phase hints

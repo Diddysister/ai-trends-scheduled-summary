@@ -8,13 +8,14 @@
 
 ## Overview
 
-AI Trends Scheduled Summary runs a 4-agent pipeline on a daily cron schedule (or manual trigger) to collect AI industry news from Hacker News, Dev.to, and web sources, then produces a curated Markdown trend report. The entire pipeline streams progress via SSE so users can watch items being fetched, filtered, scored, and written in real time.
+AI Trends Scheduled Summary runs a 5-agent pipeline on a daily cron schedule (or manual trigger) to collect AI industry news from Hacker News, Dev.to, and web sources, then produces a curated Markdown trend report plus up to 5 AI creator-topic ideas for the day. The entire pipeline streams progress via SSE so users can watch items being fetched, filtered, scored, planned, and written in real time.
 
 - **Multi-source collection** — pulls from Hacker News, Dev.to, and configurable web sources (via sandbox browser scraping)
-- **4-agent pipeline** — Curator (filter) + Summarizer (summarize) run in parallel, followed by Analyst (score + classify) and Writer (Markdown report)
+- **5-agent pipeline** — Curator (filter) + Summarizer (summarize) run in parallel, followed by Analyst (score + classify), TopicPlanner (creator-topic planning), and Writer (Markdown report)
 - **Real-time SSE streaming** — progressive content disclosure from fetch through final report, with token-level Writer streaming
 - **Cross-run deduplication** — fingerprint-based item library tracks `seenCount`, `firstSeenAt`, `lastSeenAt` across scheduled runs
 - **Comprehensive scoring** — Analyst assigns 0–100 scores based on source engagement, content quality, and AI-relevance
+- **AI creator topics** — TopicPlanner selects up to 5 high-value daily story ideas with rationale, angle, hook, suggested format, and target audience
 
 ## Environment Variables
 
@@ -67,7 +68,7 @@ ai-trends-scheduled-summary/
 │   └── ai-trends/
 │       ├── run.ts              # /ai-trends/run — main pipeline entry (SSE stream)
 │       ├── stop.ts             # /ai-trends/stop — abort a running pipeline
-│       ├── _model.ts           # 4-agent definitions, prompts, streaming logic
+│       ├── _model.ts           # 5-agent definitions, prompts, streaming logic
 │       ├── _sources.ts         # Data collection (HN, Dev.to, sandbox browser)
 │       ├── _items.ts           # Item library: fingerprinting, merge, dedup
 │       ├── _memory.ts          # Platform store persistence (reports + items)
@@ -111,9 +112,11 @@ The agent runs as a **session-mode** runtime under `agents/`. Requests sharing t
 
 4. **Analyst** — scores each item 0–100 (weighted: 40% quality, 30% heat, 30% relevance), groups by category, identifies new/active/single status, and optionally deep-dives into 2–3 top articles via `fetch_url` sandbox tool.
 
-5. **Writer (token-streaming)** — generates a structured Markdown report streamed token-by-token to the client. Filters `<think>` tags in real time. Falls back to non-streaming retry on connection failure.
+5. **TopicPlanner** — selects up to 5 AI creator-topic ideas from the day's high-value items, including rationale, content angle, opening hook, suggested format, and target audience. Falls back to score-based code generation if the agent output cannot be parsed.
 
-6. **Persist** — the final report is saved to `context.store` (platform memory). If unavailable, falls back to file-system storage.
+6. **Writer (token-streaming)** — generates a structured Markdown report with a fixed `AI 自媒体选题` section, streamed token-by-token to the client. Filters `<think>` tags in real time. Falls back to non-streaming retry on connection failure.
+
+7. **Persist** — the final report is saved to `context.store` (platform memory). If unavailable, falls back to file-system storage.
 
 ### SSE Streaming Protocol
 
@@ -124,6 +127,7 @@ The `/ai-trends/run` endpoint returns an SSE stream with typed events:
 | `stage` | Pipeline stage status transitions (`running` / `done` / `failed`) |
 | `items` | Progressive content snapshots (`fetched` → `curated` → `summarized`) |
 | `analysis` | Analyst output (categories, scores, keyInsight) |
+| `content_topics` | TopicPlanner output (daily AI creator-topic ideas) |
 | `progress` | Keepalive during long LLM calls (emitted every 8s) |
 | `token` | Writer Markdown tokens for live-typing UX |
 | `complete` | Terminal event with the full `TrendReport` payload |

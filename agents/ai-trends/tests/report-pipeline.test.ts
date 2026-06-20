@@ -71,8 +71,11 @@ async function run() {
   assert.equal(report.runId, 'run_test');
   assert.equal(report.status, 'success');
   assert.match(report.reportMarkdown, /AI Agent/);
+  assert.match(report.reportMarkdown, /AI 自媒体选题/);
   assert.match(report.reportMarkdown, /https:\/\/example\.com\/langgraph/);
   assert.equal(report.trends.length, 1);
+  assert.equal(report.contentTopics?.length, 1);
+  assert.equal(report.contentTopics?.[0]?.sourceUrl, 'https://example.com/langgraph');
 
   const fakeContext = { store: new FakeMemory() };
   await saveReportToMemory(fakeContext, report);

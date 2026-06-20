@@ -38,6 +38,7 @@ export interface TrendReport {
   reportMarkdown: string;
   trends: TrendGroup[];
   items: TrendSourceItem[];
+  contentTopics?: ContentTopic[];
   sources?: string[];
   schedule?: unknown;
   noNewItems?: boolean;
@@ -122,6 +123,28 @@ export const TrendAnalysisSchema = z.object({
 });
 export type TrendAnalysis = z.infer<typeof TrendAnalysisSchema>;
 
+// Agent 4: Content topic planner output
+export const ContentTopicSchema = z.object({
+  id: z.string().describe('Stable topic id, usually topic_1..topic_5'),
+  title: z.string().describe('适合 AI 自媒体使用的中文选题标题'),
+  sourceUrl: z.string().describe('主要来源 URL，必须来自输入资讯'),
+  sourceTitle: z.string().describe('主要来源标题，必须来自输入资讯'),
+  newsIds: z.array(z.string()).describe('支撑该选题的资讯 id，至少 1 个'),
+  score: z.number().describe('0-100 自媒体选题价值分'),
+  whyWorthMaking: z.string().describe('为什么今天值得做这个选题'),
+  contentAngle: z.string().describe('具体切入角度，避免泛泛复述新闻'),
+  hook: z.string().describe('开头钩子/标题钩子'),
+  targetAudience: z.string().describe('目标受众'),
+  format: z.string().describe('建议内容形式，如短视频/图文/长文/直播切片'),
+});
+export type ContentTopic = z.infer<typeof ContentTopicSchema>;
+
+export const ContentTopicPlannerOutputSchema = z.object({
+  topics: z.array(ContentTopicSchema).max(5),
+  plannerNotes: z.string().describe('Brief Chinese notes about selection logic'),
+});
+export type ContentTopicPlannerOutput = z.infer<typeof ContentTopicPlannerOutputSchema>;
+
 // Keep legacy TrendEntry for backward compat with report assembly
 export const TrendEntrySchema = z.object({
   trendName: z.string(),
@@ -155,7 +178,7 @@ export const ComparePeriodsParamsSchema = z.object({
 // Discriminated union for SSE pipeline events. Backend emits these via
 // `data: ${JSON.stringify(event)}\n\n` — frontend dispatches by `type`.
 
-export type StageKey = 'fetch' | 'curator' | 'summarizer' | 'analyst' | 'writer';
+export type StageKey = 'fetch' | 'curator' | 'summarizer' | 'analyst' | 'planner' | 'writer';
 export type StageStatus = 'running' | 'done' | 'failed' | 'skipped';
 export type ItemPhase = 'fetched' | 'curated' | 'summarized';
 
@@ -177,6 +200,7 @@ export type StreamEvent =
   | { type: 'items'; phase: ItemPhase; items: TrendSourceItem[] }
   // Analyst structured output
   | { type: 'analysis'; categories: AnalystCategoryEvent[]; deepDives?: AnalystDeepDiveEvent[]; keyInsight?: string }
+  | { type: 'content_topics'; topics: ContentTopic[] }
   // In-progress streaming indicator (emitted every few seconds during long LLM calls)
   | { type: 'progress'; stage: StageKey; tokenCount: number; chars: number }
   // Writer token streaming (Phase 2 — declared now, emitted later)

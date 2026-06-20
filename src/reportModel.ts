@@ -6,6 +6,7 @@ export const EMPTY_REPORT: TrendReport = {
   reportMarkdown: '# AI 趋势日报\n\n点击“立即生成”开始采集 Hacker News 与 Dev.to 的 AI 动态。',
   trends: [],
   items: [],
+  contentTopics: [],
 };
 
 export function normalizeReport(input: Partial<TrendReport> | null | undefined): TrendReport {
@@ -16,5 +17,6 @@ export function normalizeReport(input: Partial<TrendReport> | null | undefined):
     reportMarkdown: input?.reportMarkdown ?? EMPTY_REPORT.reportMarkdown,
     trends: Array.isArray(input?.trends) ? input.trends : [],
     items: Array.isArray(input?.items) ? input.items : [],
+    contentTopics: Array.isArray(input?.contentTopics) ? input.contentTopics : [],
   };
 }

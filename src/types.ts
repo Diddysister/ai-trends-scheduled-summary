@@ -22,6 +22,20 @@ export interface TrendGroup {
   items: TrendItem[];
 }
 
+export interface ContentTopic {
+  id: string;
+  title: string;
+  sourceUrl: string;
+  sourceTitle: string;
+  newsIds: string[];
+  score: number;
+  whyWorthMaking: string;
+  contentAngle: string;
+  hook: string;
+  targetAudience: string;
+  format: string;
+}
+
 export interface TrendReport {
   runId?: string;
   status: 'success' | 'failed' | 'empty' | string;
@@ -36,6 +50,7 @@ export interface TrendReport {
   reportMarkdown: string;
   trends: TrendGroup[];
   items: TrendItem[];
+  contentTopics?: ContentTopic[];
   error?: string;
   agentWarning?: string;
   noNewItems?: boolean;
@@ -56,7 +71,7 @@ export interface HistoryEntry {
 }
 
 export interface PipelineEvent {
-  stage: 'fetch' | 'curator' | 'summarizer' | 'analyst' | 'writer' | 'complete' | 'error';
+  stage: 'fetch' | 'curator' | 'summarizer' | 'analyst' | 'planner' | 'writer' | 'complete' | 'error';
   status: 'running' | 'done' | 'failed' | 'skipped';
   duration?: number;
   detail?: string;
@@ -66,7 +81,7 @@ export interface PipelineEvent {
 // ── Streaming Event Schema ────────────────────────────────────────
 // Mirrors `agents/ai-trends/_types.ts → StreamEvent`.
 
-export type StageKey = 'fetch' | 'curator' | 'summarizer' | 'analyst' | 'writer';
+export type StageKey = 'fetch' | 'curator' | 'summarizer' | 'analyst' | 'planner' | 'writer';
 export type StageStatus = 'running' | 'done' | 'failed' | 'skipped';
 export type ItemPhase = 'fetched' | 'curated' | 'summarized';
 
@@ -85,6 +100,7 @@ export type StreamEvent =
   | { type: 'stage'; stage: StageKey; status: StageStatus; duration?: number; detail?: string }
   | { type: 'items'; phase: ItemPhase; items: TrendItem[] }
   | { type: 'analysis'; categories: AnalystCategoryEvent[]; deepDives?: AnalystDeepDiveEvent[]; keyInsight?: string }
+  | { type: 'content_topics'; topics: ContentTopic[] }
   | { type: 'progress'; stage: StageKey; tokenCount: number; chars: number }
   | { type: 'token'; delta: string }
   | { type: 'complete'; report: TrendReport }
