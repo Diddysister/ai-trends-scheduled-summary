@@ -71,6 +71,26 @@ interface LiveItem extends TrendItem {
 
 type LivePhase = 'idle' | 'fetched' | 'curated' | 'summarized' | 'analyzed' | 'writing' | 'done';
 
+function deriveContentTopics(report: TrendReport): ContentTopic[] {
+  if (report.contentTopics?.length) return report.contentTopics;
+  return [...(report.items || [])]
+    .sort((a, b) => (b.score || 0) - (a.score || 0))
+    .slice(0, 5)
+    .map((item, index) => ({
+      id: `derived_topic_${index + 1}`,
+      title: `${item.title}：这件事对 AI 行业意味着什么？`,
+      sourceUrl: item.url,
+      sourceTitle: item.title,
+      newsIds: [item.id],
+      score: Math.max(60, Math.min(100, item.score || 70)),
+      whyWorthMaking: item.aiSummary || item.summary || '这条资讯在今日 AI 动态中具备较高讨论价值。',
+      contentAngle: `从 ${item.category || 'AI'} 视角拆解事件本身、受影响的人群，以及接下来值得关注的变化。`,
+      hook: '今天这条 AI 新闻，真正值得看的是它背后的信号。',
+      targetAudience: 'AI 从业者、产品经理、技术创作者和关注 AI 趋势的读者',
+      format: '图文快评或 60-90 秒短视频',
+    }));
+}
+
 /* ====================================
    Inline SVG Icons (Lucide-style)
    ==================================== */
@@ -765,6 +785,7 @@ export default function App() {
 
   const safeReport = normalizeReport(report);
   const newsItems = safeReport.items;
+  const contentTopics = useMemo(() => deriveContentTopics(safeReport), [safeReport]);
   const newItems = useMemo(() => newsItems.filter(item => item.isNew), [newsItems]);
   const recurringItems = useMemo(() => newsItems.filter(item => !item.isNew), [newsItems]);
   const trendCount = safeReport.trends.length;
@@ -847,7 +868,7 @@ export default function App() {
           </div>
 
           {!bootstrapping && !loading && safeReport.status === 'success' && (
-            <ContentTopicPanel topics={safeReport.contentTopics || []} onOpenReport={openLatestReport} />
+            <ContentTopicPanel topics={contentTopics} onOpenReport={openLatestReport} />
           )}
 
           {bootstrapping ? (
