@@ -91,6 +91,32 @@ function deriveContentTopics(report: TrendReport): ContentTopic[] {
     }));
 }
 
+function buildTopicDetailMarkdown(topic: ContentTopic): string {
+  return [
+    `# ${topic.title}`,
+    '',
+    `来源：[${topic.sourceTitle}](${topic.sourceUrl})`,
+    '',
+    '## 选题角度',
+    topic.contentAngle,
+    '',
+    '## 为什么值得做',
+    topic.whyWorthMaking,
+    '',
+    '## 开头钩子',
+    topic.hook,
+    '',
+    '## 建议形式',
+    topic.format,
+    '',
+    '## 目标受众',
+    topic.targetAudience,
+    '',
+    '## 原始新闻',
+    `[打开原文](${topic.sourceUrl})`,
+  ].join('\n');
+}
+
 /* ====================================
    Inline SVG Icons (Lucide-style)
    ==================================== */
@@ -344,7 +370,7 @@ function LiveItemCard({ item, showScore }: { item: LiveItem; showScore: boolean 
   );
 }
 
-function ContentTopicPanel({ topics, onOpenReport }: { topics: ContentTopic[]; onOpenReport: () => void }) {
+function ContentTopicPanel({ topics, onOpenTopic }: { topics: ContentTopic[]; onOpenTopic: (topic: ContentTopic) => void }) {
   const visibleTopics = topics.slice(0, 5);
   if (!visibleTopics.length) return null;
 
@@ -355,30 +381,27 @@ function ContentTopicPanel({ topics, onOpenReport }: { topics: ContentTopic[]; o
           <p className={styles.panelLabel}>Creator Topics</p>
           <h3 className={styles.contentTopicTitle}>AI 自媒体选题</h3>
         </div>
-        <button type="button" className={styles.ghostButton} onClick={onOpenReport}>
-          查看完整报告 <IconArrowRight size={13} />
-        </button>
+        <span className={styles.contentTopicCount}>{visibleTopics.length} 个角度</span>
       </div>
       <div className={styles.contentTopicList}>
         {visibleTopics.map((topic, index) => (
-          <a
+          <article
             className={styles.contentTopicItem}
-            href={topic.sourceUrl}
             key={topic.id || topic.sourceUrl}
-            target="_blank"
-            rel="noreferrer"
           >
-            <div className={styles.contentTopicIndex}>{index + 1}</div>
-            <div className={styles.contentTopicMain}>
-              <div className={styles.contentTopicMeta}>
-                <span>score {Math.round(topic.score)}</span>
-                <span>{topic.format}</span>
-              </div>
-              <strong>{topic.title}</strong>
-              <p>{topic.contentAngle}</p>
-              <span className={styles.contentTopicHook}>{topic.hook}</span>
+            <div className={styles.contentTopicTop}>
+              <span className={styles.contentTopicIndex}>{index + 1}</span>
+              <span className={styles.contentTopicScore}>score {Math.round(topic.score)}</span>
             </div>
-          </a>
+            <div className={styles.contentTopicBody}>
+              <p className={styles.contentTopicAngle}>{topic.contentAngle}</p>
+              <p className={styles.contentTopicSource}>{topic.sourceTitle}</p>
+              <p className={styles.contentTopicHook}>{topic.hook}</p>
+            </div>
+            <button type="button" className={styles.contentTopicMore} onClick={() => onOpenTopic(topic)}>
+              查看更多 <IconArrowRight size={13} />
+            </button>
+          </article>
         ))}
       </div>
     </section>
@@ -512,6 +535,7 @@ export default function App() {
   const [bootstrapping, setBootstrapping] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerReport, setDrawerReport] = useState<TrendReport | null>(null);
+  const [drawerTopic, setDrawerTopic] = useState<ContentTopic | null>(null);
   const [pipelineStages, setPipelineStages] = useState<Record<string, StageState>>({});
   const [drawerLoading, setDrawerLoading] = useState(false);
 
@@ -718,6 +742,7 @@ export default function App() {
     if (!runId) return;
     setDrawerLoading(true);
     setDrawerReport(null);
+    setDrawerTopic(null);
     setDrawerOpen(true);
     try {
       const data = await fetchReportDetail(runId);
@@ -733,14 +758,25 @@ export default function App() {
   const openLatestReport = useCallback(() => {
     if (report.status === 'success') {
       setDrawerReport(report);
+      setDrawerTopic(null);
       setDrawerOpen(true);
       requestAnimationFrame(() => drawerBodyRef.current?.scrollTo(0, 0));
     }
   }, [report]);
 
+  const openTopicDetail = useCallback((topic: ContentTopic) => {
+    setDrawerReport(null);
+    setDrawerTopic(topic);
+    setDrawerLoading(false);
+    setStreamingDrawerOpen(false);
+    setDrawerOpen(true);
+    requestAnimationFrame(() => drawerBodyRef.current?.scrollTo(0, 0));
+  }, []);
+
   const closeDrawer = useCallback(() => {
     setDrawerOpen(false);
     setStreamingDrawerOpen(false);
+    setDrawerTopic(null);
   }, []);
 
   const handleDelete = useCallback(async (runId?: string) => {
@@ -868,7 +904,7 @@ export default function App() {
           </div>
 
           {!bootstrapping && !loading && safeReport.status === 'success' && (
-            <ContentTopicPanel topics={contentTopics} onOpenReport={openLatestReport} />
+            <ContentTopicPanel topics={contentTopics} onOpenTopic={openTopicDetail} />
           )}
 
           {bootstrapping ? (
@@ -1072,11 +1108,14 @@ export default function App() {
       <aside className={`${styles.drawer} ${drawerOpen ? styles.drawerOpen : ''}`}>
         <div className={styles.drawerHeader}>
           <div>
-            <p className={styles.panelLabel}>{streamingDrawerOpen ? t('liveWriting') : t('fullReport')}</p>
+            <p className={styles.panelLabel}>
+              {streamingDrawerOpen ? t('liveWriting') : drawerTopic ? 'Creator Topic' : t('fullReport')}
+            </p>
             <h2 className={styles.drawerTitle}>
               {streamingDrawerOpen
                 ? t('writingTitle')
-                : drawerReport?.generatedAt ? formatTime(drawerReport.generatedAt, locale) : t('reportTitle')}
+                : drawerTopic ? '选题详情'
+                  : drawerReport?.generatedAt ? formatTime(drawerReport.generatedAt, locale) : t('reportTitle')}
             </h2>
           </div>
           <button type="button" className={styles.drawerClose} onClick={closeDrawer} aria-label={t('close')}>
@@ -1107,8 +1146,19 @@ export default function App() {
           </div>
         )}
 
+        {/* Creator topic detail view */}
+        {!streamingDrawerOpen && drawerTopic && (
+          <div className={styles.drawerBody} ref={drawerBodyRef}>
+            <div className={styles.drawerMeta}>
+              <span className={styles.reportMetaTag}>score {Math.round(drawerTopic.score)}</span>
+              <span className={styles.reportMetaTag}>{drawerTopic.format}</span>
+            </div>
+            <MarkdownReport markdown={buildTopicDetailMarkdown(drawerTopic)} />
+          </div>
+        )}
+
         {/* Formal report view */}
-        {!streamingDrawerOpen && drawerReport && (
+        {!streamingDrawerOpen && !drawerTopic && drawerReport && (
           <div className={styles.drawerBody} ref={drawerBodyRef}>
             <div className={styles.drawerMeta}>
               {drawerReport.itemCount != null && <span className={styles.reportMetaTag}>{drawerReport.itemCount} {t('reportItems')}</span>}
