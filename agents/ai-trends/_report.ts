@@ -25,13 +25,13 @@ function normalizeTopicKey(value: string): string {
   return value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 }
 
-function topicAngleForItem(item: TrendSourceItem): string {
+function topicTitleForItem(item: TrendSourceItem): string {
   const title = item.title.trim();
   const summary = (item.aiSummary || item.summary || '').trim();
   if (summary) {
-    return `围绕「${title}」拆解：它解决了什么问题、影响哪些人，以及为什么今天值得单独讲。`;
+    return `「${title}」背后释放了什么 AI 行业信号？`;
   }
-  return `把「${title}」作为入口，讲清楚这条 AI 动态背后的产业信号和用户影响。`;
+  return `为什么「${title}」值得今天单独聊一次？`;
 }
 
 export function buildFallbackContentTopics(items: TrendSourceItem[]): ContentTopic[] {
@@ -45,13 +45,13 @@ export function buildFallbackContentTopics(items: TrendSourceItem[]): ContentTop
     used.add(key);
     topics.push({
       id: `topic_${topics.length + 1}`,
-      title: `${item.title}：这件事对 AI 行业意味着什么？`,
+      title: topicTitleForItem(item),
       sourceUrl: item.url,
       sourceTitle: item.title,
       newsIds: [item.id],
       score: Math.max(60, Math.min(100, item.score || 70)),
       whyWorthMaking: item.aiSummary || item.summary || '该动态与当天 AI 技术或产业讨论直接相关，适合快速转化为观点型内容。',
-      contentAngle: topicAngleForItem(item),
+      contentAngle: topicTitleForItem(item),
       hook: '今天这条 AI 新闻，真正值得看的是它背后的信号。',
       targetAudience: 'AI 从业者、产品经理、技术创作者和关注 AI 趋势的读者',
       format: '图文快评或 60-90 秒短视频',

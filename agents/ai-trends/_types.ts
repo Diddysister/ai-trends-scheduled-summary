@@ -132,7 +132,7 @@ export const ContentTopicSchema = z.object({
   newsIds: z.array(z.string()).describe('支撑该选题的资讯 id，至少 1 个'),
   score: z.number().describe('0-100 自媒体选题价值分'),
   whyWorthMaking: z.string().describe('为什么今天值得做这个选题'),
-  contentAngle: z.string().describe('具体切入角度，避免泛泛复述新闻'),
+  contentAngle: z.string().describe('可直接作为自媒体标题使用的中文选题角度/标题，必须有话题性'),
   hook: z.string().describe('开头钩子/标题钩子'),
   targetAudience: z.string().describe('目标受众'),
   format: z.string().describe('建议内容形式，如短视频/图文/长文/直播切片'),

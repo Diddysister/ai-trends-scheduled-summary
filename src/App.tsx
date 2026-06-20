@@ -92,20 +92,23 @@ function deriveContentTopics(report: TrendReport): ContentTopic[] {
 
   const usedItems = new Set<string>();
   const derived: ContentTopic[] = [];
-  for (const item of [...(report.items || [])].sort((a, b) => (b.score || 0) - (a.score || 0))) {
+  const sortedItems = [...(report.items || [])].sort((a, b) => (b.score || 0) - (a.score || 0));
+  const topicWorthy = sortedItems.filter(item => (item.score || 0) >= 75 || item.isNew);
+  const candidateItems = topicWorthy.length >= 3 ? topicWorthy : sortedItems;
+  for (const item of candidateItems) {
     const itemKey = normalizeKey(item.url || item.title);
     if (usedItems.has(itemKey)) continue;
     usedItems.add(itemKey);
     derived.push({
       id: `derived_topic_${derived.length + 1}`,
-      title: `${item.title}：这件事对 AI 行业意味着什么？`,
+      title: `「${item.title}」背后释放了什么 AI 行业信号？`,
       sourceUrl: item.url,
       sourceTitle: item.title,
       newsIds: [item.id],
       score: Math.max(60, Math.min(100, item.score || 70)),
       whyWorthMaking: item.aiSummary || item.summary || '这条资讯在今日 AI 动态中具备较高讨论价值。',
-      contentAngle: `围绕「${item.title}」拆解：它解决了什么问题、影响哪些人，以及为什么今天值得单独讲。`,
-      hook: '今天这条 AI 新闻，真正值得看的是它背后的信号。',
+      contentAngle: `「${item.title}」背后释放了什么 AI 行业信号？`,
+      hook: '',
       targetAudience: 'AI 从业者、产品经理、技术创作者和关注 AI 趋势的读者',
       format: '图文快评或 60-90 秒短视频',
     });
@@ -122,9 +125,6 @@ function buildTopicDetailMarkdown(topic: ContentTopic): string {
     '',
     '## 选题角度',
     topic.contentAngle,
-    '',
-    '## 开头钩子',
-    topic.hook,
     '',
     '## 建议形式',
     topic.format,
@@ -411,12 +411,10 @@ function ContentTopicPanel({ topics, onOpenTopic }: { topics: ContentTopic[]; on
           >
             <div className={styles.contentTopicTop}>
               <span className={styles.contentTopicIndex}>{index + 1}</span>
-              <span className={styles.contentTopicScore}>score {Math.round(topic.score)}</span>
             </div>
             <div className={styles.contentTopicBody}>
-              <p className={styles.contentTopicAngle}>{topic.contentAngle}</p>
+              <p className={styles.contentTopicAngle}>{topic.contentAngle || topic.title}</p>
               <p className={styles.contentTopicSource}>{topic.sourceTitle}</p>
-              <p className={styles.contentTopicHook}>{topic.hook}</p>
             </div>
             <button type="button" className={styles.contentTopicMore} onClick={() => onOpenTopic(topic)}>
               查看更多 <IconArrowRight size={13} />
