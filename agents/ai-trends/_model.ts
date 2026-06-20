@@ -310,7 +310,7 @@ function createWriterAgent(env: Record<string, string | undefined>) {
       '（基于 deepDives 字段，2-3 个被深入分析过的条目，附带 insight）',
       '',
       '## AI 自媒体选题',
-      '（基于 contentTopics 字段，输出 3-5 个最值得今天做成 AI 自媒体内容的选题。每个选题包含：选题标题、来源、选题价值、可直接使用的标题角度、建议形式与目标受众。）',
+      '（基于 contentTopics 字段，输出 3-4 个最值得今天做成 AI 自媒体内容的选题。每个选题包含：选题标题、来源、选题价值、可直接使用的标题角度、建议形式与目标受众。）',
       '',
       '写作要求：',
       '1. 所有来源链接使用 Markdown 超链接格式 [title](url)；',
@@ -328,23 +328,23 @@ function createTopicPlannerAgent(env: Record<string, string | undefined>) {
   return new Agent({
     name: 'TopicPlannerAgent',
     instructions: [
-      '你是 AI 自媒体选题策划专家。你的任务是从当天已筛选和打分的 AI 资讯中，选出最值得做成内容的 3-5 个选题。',
+      '你是 AI 自媒体选题策划专家。你的任务是从当天已筛选和打分的 AI 资讯中，选出最值得做成内容的 3-4 个选题。',
       '',
       '选择标准：',
       '1. 新闻必须来自输入数据，sourceUrl/sourceTitle/newsIds 不能编造；',
       '2. 必须有话题性：至少满足以下之一：高热度/高互动、事件足够反常或炸裂、明显争议或冲突、影响面广、能引出强行业判断；',
       '3. 普通产品更新、一般技术博客、日常融资/招聘/营销、没有讨论点的资讯不要选；',
       '4. contentAngle 不是解释说明，而是可直接作为自媒体标题使用的中文选题标题，要具体、有悬念、有传播点，避免"拆解某某意味着什么"这种模板句；',
-      '5. title 和 contentAngle 可以相同或相近，但都必须像选题标题，而不是新闻原题复述；',
+      '5. title 和 contentAngle 可以相同或相近，但都必须像选题标题，而不是新闻原题复述；严禁多个选题使用同一个标题模板或同一个尾句；',
       '6. 选题之间必须明显不同：不能只是同一角度换标题；同一新闻只允许对应一个选题；',
-      '7. 如果高质量且不重复的选题不足 5 个，可以只输出 3 或 4 个，但不要低质量凑数；',
+      '7. 如果高质量且不重复的选题不足 4 个，可以只输出 3 个，但不要低质量凑数；',
       '8. 每个选题需要能独立成稿，适合图文、短视频、长文或直播切片；',
       '9. 评分 score 表示自媒体选题价值，综合考虑热度、炸裂程度、争议性、差异化、受众相关度和可讲述性。',
       '',
       '你必须只输出 JSON，格式如下（不要包含其他文字）：',
       '{"topics":[{"id":"topic_1","title":"一个可直接使用的中文选题标题","sourceUrl":"...","sourceTitle":"...","newsIds":["..."],"score":88,"whyWorthMaking":"说明它的话题性/热度/炸裂点","contentAngle":"一个可直接使用的中文选题标题","hook":"...","targetAudience":"...","format":"..."}],"plannerNotes":"..."}',
       '',
-      'topics 必须为 3-5 个；如果高质量不重复选题不足 5 个，输出 3 或 4 个即可。',
+      'topics 必须为 3-4 个；如果高质量不重复选题不足 4 个，输出 3 个即可。',
     ].join('\n'),
     model: createModel(env),
   });
@@ -415,7 +415,7 @@ function buildWriterPrompt(
 
 function buildTopicPlannerPrompt(items: TrendSourceItem[], analysis: TrendAnalysis | null, noNewItems?: boolean): string {
   const lines = [
-    '请从以下当天 AI 资讯中筛选最值得做成 AI 自媒体内容的 3-5 个选题，并为每个选题设计可直接作为内容标题的选题角度。',
+    '请从以下当天 AI 资讯中筛选最值得做成 AI 自媒体内容的 3-4 个选题，并为每个选题设计可直接作为内容标题的选题角度。',
     '筛选时只选有话题性/热度/争议/炸裂感/影响面的资讯，普通资讯不要为了凑数入选。',
     '',
     '当天资讯（含 url、category、aiSummary、score、isNew、seenCount）：',
@@ -458,7 +458,7 @@ function normalizeContentTopics(rawTopics: ContentTopic[] | undefined, items: Tr
       newsIds: supportingItems.length ? supportingItems.map(item => item.id) : [primary.id],
       score: Math.max(0, Math.min(100, Number(topic.score) || primary.score || 70)),
     });
-    if (normalized.length >= 5) break;
+    if (normalized.length >= 4) break;
   }
   return normalized;
 }
@@ -508,7 +508,7 @@ function appendContentTopicsToMarkdown(lines: string[], topics: ContentTopic[]):
     lines.push('暂无足够明确的选题候选。', '');
     return;
   }
-  for (const [index, topic] of topics.slice(0, 5).entries()) {
+  for (const [index, topic] of topics.slice(0, 4).entries()) {
     lines.push(
       `${index + 1}. **${topic.title}**`,
       `   - 来源：[${topic.sourceTitle}](${topic.sourceUrl})`,

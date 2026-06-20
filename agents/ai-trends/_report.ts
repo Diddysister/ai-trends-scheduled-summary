@@ -27,11 +27,32 @@ function normalizeTopicKey(value: string): string {
 
 function topicTitleForItem(item: TrendSourceItem): string {
   const title = item.title.trim();
-  const summary = (item.aiSummary || item.summary || '').trim();
-  if (summary) {
-    return `「${title}」背后释放了什么 AI 行业信号？`;
+  const lower = title.toLowerCase();
+  if (lower.includes('oauth') || lower.includes('mcp')) {
+    return 'MCP 开始补安全课：AI Agent 的登录授权会成为下一个爆点吗？';
   }
-  return `为什么「${title}」值得今天单独聊一次？`;
+  if (lower.includes('anthropic') && lower.includes('john jumper')) {
+    return '诺奖级科学家加入 Anthropic：顶尖人才为什么正在涌向 AI 公司？';
+  }
+  if (title.includes('诺贝尔') || title.includes('奖得主') || lower.includes('nobel')) {
+    return '诺贝尔奖得主下场做 AI：大模型公司的人才战升级了吗？';
+  }
+  if (lower.includes('boston dynamics') || lower.includes('hyundai')) {
+    return '现代买下波士顿动力：具身智能会重新点燃机器人叙事吗？';
+  }
+  if (lower.includes('codegen') || lower.includes('coding') || lower.includes('autonomous coding')) {
+    return '国产编程模型正面硬刚：AI Coding 真的要进入价格战了吗？';
+  }
+  if (lower.includes('ban') || title.includes('禁') || title.includes('限制')) {
+    return 'AI 被学校和政策按下刹车：监管会不会改变下一波产品机会？';
+  }
+  if (lower.includes('robot')) {
+    return '机器人又被 AI 推到台前：这次是真机会还是老叙事重启？';
+  }
+  if (lower.includes('agent')) {
+    return 'AI Agent 又有新动作：这次离真正可用还有多远？';
+  }
+  return title.length > 44 ? `${title.slice(0, 42)}...这事为什么值得聊？` : `${title}，为什么值得今天聊？`;
 }
 
 export function buildFallbackContentTopics(items: TrendSourceItem[]): ContentTopic[] {
@@ -56,7 +77,7 @@ export function buildFallbackContentTopics(items: TrendSourceItem[]): ContentTop
       targetAudience: 'AI 从业者、产品经理、技术创作者和关注 AI 趋势的读者',
       format: '图文快评或 60-90 秒短视频',
     });
-    if (topics.length >= 5) break;
+    if (topics.length >= 4) break;
   }
   return topics;
 }
@@ -67,7 +88,7 @@ function appendContentTopics(lines: string[], topics: ContentTopic[]): void {
     lines.push('暂无足够明确的选题候选。', '');
     return;
   }
-  for (const topic of topics.slice(0, 5)) {
+  for (const topic of topics.slice(0, 4)) {
     lines.push(
       `${topic.id.replace('topic_', '')}. **${topic.title}**`,
       `   - 来源：[${topic.sourceTitle}](${topic.sourceUrl})`,

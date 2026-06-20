@@ -140,7 +140,7 @@ export const ContentTopicSchema = z.object({
 export type ContentTopic = z.infer<typeof ContentTopicSchema>;
 
 export const ContentTopicPlannerOutputSchema = z.object({
-  topics: z.array(ContentTopicSchema).min(3).max(5),
+  topics: z.array(ContentTopicSchema).min(3).max(4),
   plannerNotes: z.string().describe('Brief Chinese notes about selection logic'),
 });
 export type ContentTopicPlannerOutput = z.infer<typeof ContentTopicPlannerOutputSchema>;
