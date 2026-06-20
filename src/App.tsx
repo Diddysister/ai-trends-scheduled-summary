@@ -72,23 +72,46 @@ interface LiveItem extends TrendItem {
 type LivePhase = 'idle' | 'fetched' | 'curated' | 'summarized' | 'analyzed' | 'writing' | 'done';
 
 function deriveContentTopics(report: TrendReport): ContentTopic[] {
-  if (report.contentTopics?.length) return report.contentTopics;
-  return [...(report.items || [])]
-    .sort((a, b) => (b.score || 0) - (a.score || 0))
-    .slice(0, 5)
-    .map((item, index) => ({
-      id: `derived_topic_${index + 1}`,
+  const normalizeKey = (value: string) => value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  const dedupeTopics = (topics: ContentTopic[]) => {
+    const usedSources = new Set<string>();
+    const usedAngles = new Set<string>();
+    const unique: ContentTopic[] = [];
+    for (const topic of topics) {
+      const sourceKey = normalizeKey(topic.sourceUrl || topic.sourceTitle || topic.title);
+      const angleKey = normalizeKey(topic.contentAngle || topic.title);
+      if (usedSources.has(sourceKey) || usedAngles.has(angleKey)) continue;
+      usedSources.add(sourceKey);
+      usedAngles.add(angleKey);
+      unique.push(topic);
+      if (unique.length >= 5) break;
+    }
+    return unique;
+  };
+  if (report.contentTopics?.length) return dedupeTopics(report.contentTopics);
+
+  const usedItems = new Set<string>();
+  const derived: ContentTopic[] = [];
+  for (const item of [...(report.items || [])].sort((a, b) => (b.score || 0) - (a.score || 0))) {
+    const itemKey = normalizeKey(item.url || item.title);
+    if (usedItems.has(itemKey)) continue;
+    usedItems.add(itemKey);
+    derived.push({
+      id: `derived_topic_${derived.length + 1}`,
       title: `${item.title}：这件事对 AI 行业意味着什么？`,
       sourceUrl: item.url,
       sourceTitle: item.title,
       newsIds: [item.id],
       score: Math.max(60, Math.min(100, item.score || 70)),
       whyWorthMaking: item.aiSummary || item.summary || '这条资讯在今日 AI 动态中具备较高讨论价值。',
-      contentAngle: `从 ${item.category || 'AI'} 视角拆解事件本身、受影响的人群，以及接下来值得关注的变化。`,
+      contentAngle: `围绕「${item.title}」拆解：它解决了什么问题、影响哪些人，以及为什么今天值得单独讲。`,
       hook: '今天这条 AI 新闻，真正值得看的是它背后的信号。',
       targetAudience: 'AI 从业者、产品经理、技术创作者和关注 AI 趋势的读者',
       format: '图文快评或 60-90 秒短视频',
-    }));
+    });
+    if (derived.length >= 5) break;
+  }
+  return derived;
 }
 
 function buildTopicDetailMarkdown(topic: ContentTopic): string {
@@ -99,9 +122,6 @@ function buildTopicDetailMarkdown(topic: ContentTopic): string {
     '',
     '## 选题角度',
     topic.contentAngle,
-    '',
-    '## 为什么值得做',
-    topic.whyWorthMaking,
     '',
     '## 开头钩子',
     topic.hook,

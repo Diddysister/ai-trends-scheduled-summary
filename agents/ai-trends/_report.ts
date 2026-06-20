@@ -21,23 +21,44 @@ function summarizeCategory(category: string, items: TrendSourceItem[]): string {
   return `${category} 方向出现 ${items.length} 条相关动态，代表内容包括：${titles.join('；')}。`;
 }
 
+function normalizeTopicKey(value: string): string {
+  return value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+}
+
+function topicAngleForItem(item: TrendSourceItem): string {
+  const title = item.title.trim();
+  const summary = (item.aiSummary || item.summary || '').trim();
+  if (summary) {
+    return `围绕「${title}」拆解：它解决了什么问题、影响哪些人，以及为什么今天值得单独讲。`;
+  }
+  return `把「${title}」作为入口，讲清楚这条 AI 动态背后的产业信号和用户影响。`;
+}
+
 export function buildFallbackContentTopics(items: TrendSourceItem[]): ContentTopic[] {
-  return [...items]
+  const used = new Set<string>();
+  const topics: ContentTopic[] = [];
+  for (const item of [...items]
     .sort((a, b) => (b.score || 0) - (a.score || 0))
-    .slice(0, 5)
-    .map((item, index) => ({
-      id: `topic_${index + 1}`,
+  ) {
+    const key = item.fingerprint || normalizeTopicKey(item.url || item.title);
+    if (used.has(key)) continue;
+    used.add(key);
+    topics.push({
+      id: `topic_${topics.length + 1}`,
       title: `${item.title}：这件事对 AI 行业意味着什么？`,
       sourceUrl: item.url,
       sourceTitle: item.title,
       newsIds: [item.id],
       score: Math.max(60, Math.min(100, item.score || 70)),
       whyWorthMaking: item.aiSummary || item.summary || '该动态与当天 AI 技术或产业讨论直接相关，适合快速转化为观点型内容。',
-      contentAngle: `从 ${item.category || 'AI Industry'} 视角拆解事件本身、受影响的人群，以及接下来可能出现的变化。`,
+      contentAngle: topicAngleForItem(item),
       hook: '今天这条 AI 新闻，真正值得看的是它背后的信号。',
       targetAudience: 'AI 从业者、产品经理、技术创作者和关注 AI 趋势的读者',
       format: '图文快评或 60-90 秒短视频',
-    }));
+    });
+    if (topics.length >= 5) break;
+  }
+  return topics;
 }
 
 function appendContentTopics(lines: string[], topics: ContentTopic[]): void {

@@ -310,7 +310,7 @@ function createWriterAgent(env: Record<string, string | undefined>) {
       '（基于 deepDives 字段，2-3 个被深入分析过的条目，附带 insight）',
       '',
       '## AI 自媒体选题',
-      '（基于 contentTopics 字段，严格输出 5 个最值得今天做成 AI 自媒体内容的选题。每个选题包含：选题标题、来源、选题价值、切入角度、开头钩子、建议形式与目标受众。）',
+      '（基于 contentTopics 字段，输出 3-5 个最值得今天做成 AI 自媒体内容的选题。每个选题包含：选题标题、来源、选题价值、切入角度、开头钩子、建议形式与目标受众。）',
       '',
       '写作要求：',
       '1. 所有来源链接使用 Markdown 超链接格式 [title](url)；',
@@ -328,20 +328,22 @@ function createTopicPlannerAgent(env: Record<string, string | undefined>) {
   return new Agent({
     name: 'TopicPlannerAgent',
     instructions: [
-      '你是 AI 自媒体选题策划专家。你的任务是从当天已筛选和打分的 AI 资讯中，选出最值得做成内容的 5 个选题。',
+      '你是 AI 自媒体选题策划专家。你的任务是从当天已筛选和打分的 AI 资讯中，选出最值得做成内容的 3-5 个选题。',
       '',
       '选择标准：',
       '1. 新闻必须来自输入数据，sourceUrl/sourceTitle/newsIds 不能编造；',
       '2. 优先选择：影响面广、观点冲突强、有实操价值、有传播钩子、能引出行业判断的资讯；',
       '3. 不要只复述新闻，要给出适合自媒体表达的具体切入角度；',
       '4. 避免 5 个选题全部集中在同一细分方向，除非当天确实只有一个主题；',
-      '5. 每个选题需要能独立成稿，适合图文、短视频、长文或直播切片；',
-      '6. 评分 score 表示自媒体选题价值，综合考虑热度、差异化、受众相关度和可讲述性。',
+      '5. 选题之间必须明显不同：不能只是同一角度换标题；同一新闻只允许对应一个选题；',
+      '6. 如果高质量且不重复的选题不足 5 个，可以只输出 3 或 4 个，但不要低质量凑数；',
+      '7. 每个选题需要能独立成稿，适合图文、短视频、长文或直播切片；',
+      '8. 评分 score 表示自媒体选题价值，综合考虑热度、差异化、受众相关度和可讲述性。',
       '',
       '你必须只输出 JSON，格式如下（不要包含其他文字）：',
       '{"topics":[{"id":"topic_1","title":"...","sourceUrl":"...","sourceTitle":"...","newsIds":["..."],"score":88,"whyWorthMaking":"...","contentAngle":"...","hook":"...","targetAudience":"...","format":"..."}],"plannerNotes":"..."}',
       '',
-      'topics 必须最多 5 个；如果输入不足 5 条，则输出尽可能多的高质量选题。',
+      'topics 必须为 3-5 个；如果高质量不重复选题不足 5 个，输出 3 或 4 个即可。',
     ].join('\n'),
     model: createModel(env),
   });
@@ -412,7 +414,7 @@ function buildWriterPrompt(
 
 function buildTopicPlannerPrompt(items: TrendSourceItem[], analysis: TrendAnalysis | null, noNewItems?: boolean): string {
   const lines = [
-    '请从以下当天 AI 资讯中筛选最值得做成 AI 自媒体内容的 5 个选题，并为每个选题设计内容角度。',
+    '请从以下当天 AI 资讯中筛选最值得做成 AI 自媒体内容的 3-5 个选题，并为每个选题设计内容角度。',
     '',
     '当天资讯（含 url、category、aiSummary、score、isNew、seenCount）：',
     buildItemsJson(items),
@@ -431,12 +433,21 @@ function normalizeContentTopics(rawTopics: ContentTopic[] | undefined, items: Tr
   const byId = new Map(items.map(item => [item.id, item]));
   const byUrl = new Map(items.map(item => [item.url, item]));
   const normalized: ContentTopic[] = [];
+  const usedNewsIds = new Set<string>();
+  const usedUrls = new Set<string>();
+  const usedAngles = new Set<string>();
+  const keyOf = (value: string) => value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
   for (const topic of rawTopics) {
     const supportingItems = topic.newsIds
       .map(id => byId.get(id))
       .filter((item): item is TrendSourceItem => !!item);
     const primary = supportingItems[0] || byUrl.get(topic.sourceUrl);
     if (!primary) continue;
+    const angleKey = keyOf(topic.contentAngle || topic.title);
+    if (usedNewsIds.has(primary.id) || usedUrls.has(primary.url) || usedAngles.has(angleKey)) continue;
+    usedNewsIds.add(primary.id);
+    usedUrls.add(primary.url);
+    usedAngles.add(angleKey);
     normalized.push({
       ...topic,
       id: topic.id || `topic_${normalized.length + 1}`,
@@ -861,7 +872,9 @@ export async function runAgentPipeline(input: PipelineInput): Promise<{
     const parsed = parseJsonFromText<ContentTopicPlannerOutput>(raw);
     const dPlanner = +(((Date.now() - tPlanner) / 1000).toFixed(1));
     const normalizedTopics = normalizeContentTopics(parsed?.topics, enrichedItems);
-    if (normalizedTopics.length) {
+    const distinctSourceCount = new Set(enrichedItems.map(item => item.url || item.id)).size;
+    const minTopicCount = Math.min(3, distinctSourceCount);
+    if (normalizedTopics.length >= minTopicCount) {
       contentTopics = normalizedTopics;
       stages.contentTopicOutput = { topics: contentTopics, plannerNotes: parsed?.plannerNotes || '' };
       const detail = `${contentTopics.length} topics`;
