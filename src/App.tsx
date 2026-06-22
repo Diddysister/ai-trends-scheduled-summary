@@ -274,8 +274,12 @@ function PipelineBar({
         const maxDur = Math.max(...subs.map(s => s.duration ?? 0));
         return { status: 'done', duration: maxDur };
       }
-      if (subs.some(s => s.status === 'failed')) return { status: 'failed' };
       if (subs.some(s => s.status === 'running')) return { status: 'running' };
+      if (subs.some(s => s.status === 'done') && subs.some(s => s.status === 'failed')) {
+        const maxDur = Math.max(...subs.map(s => s.duration ?? 0));
+        return { status: 'done', duration: maxDur };
+      }
+      if (subs.some(s => s.status === 'failed')) return { status: 'failed' };
       return { status: 'pending' };
     }
     return stages[def.key] || { status: 'pending' as StageStatus };

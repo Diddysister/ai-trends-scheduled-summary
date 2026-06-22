@@ -741,11 +741,15 @@ export async function runAgentPipeline(input: PipelineInput): Promise<{
         emit({ type: 'items', phase: 'curated', items: curatedItems });
       } else {
         console.log('[pipeline] Curator: output parse failed, using all items');
-        emit({ stage: 'curator', status: 'failed', duration: stage12Duration, detail: 'parse failed' });
+        curatedItems = items;
+        emit({ stage: 'curator', status: 'done', duration: stage12Duration, detail: 'fallback: using all items' });
+        emit({ type: 'items', phase: 'curated', items: curatedItems });
       }
     } else {
       console.log('[pipeline] Curator failed:', curatorResult.reason);
-      emit({ stage: 'curator', status: 'failed', duration: stage12Duration, detail: 'agent error' });
+      curatedItems = items;
+      emit({ stage: 'curator', status: 'done', duration: stage12Duration, detail: 'fallback: using all items' });
+      emit({ type: 'items', phase: 'curated', items: curatedItems });
     }
 
     // Process Summarizer
@@ -770,12 +774,14 @@ export async function runAgentPipeline(input: PipelineInput): Promise<{
       } else {
         enrichedItems = curatedItems;
         console.log('[pipeline] Summarizer: output parse failed, no summaries');
-        emit({ stage: 'summarizer', status: 'failed', duration: stage12Duration, detail: 'parse failed' });
+        emit({ stage: 'summarizer', status: 'done', duration: stage12Duration, detail: 'fallback: source summaries' });
+        emit({ type: 'items', phase: 'summarized', items: enrichedItems });
       }
     } else {
       enrichedItems = curatedItems;
       console.log('[pipeline] Summarizer failed:', summarizerResult.reason);
-      emit({ stage: 'summarizer', status: 'failed', duration: stage12Duration, detail: 'agent error' });
+      emit({ stage: 'summarizer', status: 'done', duration: stage12Duration, detail: 'fallback: source summaries' });
+      emit({ type: 'items', phase: 'summarized', items: enrichedItems });
     }
   } catch (error) {
     // If aborted, rethrow to skip remaining stages
