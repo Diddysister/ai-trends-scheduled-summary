@@ -935,6 +935,10 @@ export default function App() {
       <section className={styles.mainLayout}>
         {/* Main: News Feed */}
         <section className={styles.contentPanel}>
+          {!bootstrapping && !loading && safeReport.status === 'success' && (
+            <ContentTopicPanel topics={contentTopics} onOpenTopic={openTopicDetail} />
+          )}
+
           <div className={styles.feedHeader}>
             <div>
               <p className={styles.panelLabel}>{t('feedLabel')}</p>
@@ -953,10 +957,6 @@ export default function App() {
               {TOPICS.map(topic => <span key={topic}>{topic}</span>)}
             </div>
           </div>
-
-          {!bootstrapping && !loading && safeReport.status === 'success' && (
-            <ContentTopicPanel topics={contentTopics} onOpenTopic={openTopicDetail} />
-          )}
 
           {bootstrapping ? (
             <SkeletonNewsList />

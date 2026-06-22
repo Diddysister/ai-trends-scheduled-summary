@@ -412,6 +412,10 @@
   background: #fbfdff;
 }
 
+.contentTopicPanel + .feedHeader {
+  border-top: 0;
+}
+
 .contentTopicHeader {
   display: flex;
   align-items: center;
