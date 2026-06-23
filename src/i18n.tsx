@@ -7,7 +7,7 @@ const translations = {
     // Header
     eyebrow: 'AI Trends Monitor',
     title: 'AI 热点汇总',
-    subtitle: '按计划采集公开技术资讯，沉淀为可追溯的 AI 趋势报告。',
+    subtitle: '按计划采集公开 AI 信息，沉淀为可追溯的 AI 趋势报告。',
     scheduleHint: '每日 9:00 自动采集',
     generate: '手动生成',
     generating: '生成中...',
@@ -37,7 +37,7 @@ const translations = {
 
     // Feed
     feedLabel: 'News Feed',
-    feedTitle: '资讯流',
+    feedTitle: '信息流',
     refresh: '刷新',
     newItems: '新增资讯',
     recurring: '持续关注',
@@ -85,7 +85,7 @@ const translations = {
 
     // Onboarding
     onboardingTitle: '开始你的第一份 AI 趋势报告',
-    onboardingDesc: '从 Hacker News、Dev.to、36kr 等公开技术资讯中聚合最新 AI 动态，通过 4 步 Agent 流水线（采集 → 策展 → 摘要 → 分析）输出可追溯的趋势报告。',
+    onboardingDesc: '从 Hacker News、Dev.to、36kr 等公开 AI 信息中聚合最新 AI 动态，通过 Agent 流水线输出可追溯的趋势报告。',
     onboardingFeature1: '多源采集',
     onboardingFeature2: '智能聚类',
     onboardingFeature3: '持续追踪',
